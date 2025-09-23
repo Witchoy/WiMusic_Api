@@ -1,0 +1,65 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+}
+
+model Track {
+    id    Int    @id @default(autoincrement())
+    title String
+
+    artists ArtistTrack[]
+    albums  TrackAlbum[]
+}
+
+model Artist {
+    id   Int    @id @default(autoincrement())
+    name String
+
+    tracks ArtistTrack[]
+    albums ArtistAlbum[]
+}
+
+model Album {
+    id   Int    @id @default(autoincrement())
+    title String
+
+    tracks  TrackAlbum[]
+    artists ArtistAlbum[]
+}
+
+model ArtistTrack {
+    track   Track @relation(fields: [trackId], references: [id])
+    trackId Int
+
+    artist   Artist @relation(fields: [artistId], references: [id])
+    artistId Int
+
+    @@id([trackId, artistId])
+}
+
+model TrackAlbum {
+    track   Track @relation(fields: [trackId], references: [id])
+    trackId Int
+
+    album   Album @relation(fields: [albumId], references: [id])
+    albumId Int
+
+    @@id([trackId, albumId])
+}
+
+model ArtistAlbum {
+    artist   Artist @relation(fields: [artistId], references: [id])
+    artistId Int
+
+    album   Album @relation(fields: [albumId], references: [id])
+    albumId Int
+
+    @@id([artistId, albumId])
+}
