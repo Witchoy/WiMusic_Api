@@ -1,8 +1,9 @@
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
-import { HttpError } from "./error.js";
+import { HttpError } from "./utils/error.js";
 import { assert, object, optional, refine, string } from "superstruct";
 import validator from "validator";
+import { config } from './utils/config.js';
 
 // Import request handlers
 import * as track from './requestHandlers/track.js';
@@ -11,7 +12,7 @@ import * as album from './requestHandlers/album.js';
 
 const { isInt } = validator;
 const app = express();
-const port = 3000;
+const port = config.port;
 
 // ========================================
 // MIDDLEWARE CONFIGURATION
@@ -70,6 +71,10 @@ app.route("/tracks")
 app.route("/tracks/:track_id")
 	.all(validateParams)
 	.get(track.get_one);
+
+app.route("/tracks/:track_id/stream")
+	.all(validateParams)
+	.get(track.stream_one)
 
 // ========================================
 // ARTISTS ROUTES

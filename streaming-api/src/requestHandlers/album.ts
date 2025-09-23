@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import { NotFoundError } from "../error.js";
-import { prisma } from "../db.js";
+import { NotFoundError } from "../utils/error.js";
+import { prisma } from "../utils/db.js";
 
 // Handler to get all albums, with optional pagination
 export async function get_all(req: Request, res: Response) {
