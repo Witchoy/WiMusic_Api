@@ -5,7 +5,6 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { config } from '../utils/config.js';
 
-// Define your media root directory - adjust this path to your actual media directory
 const MEDIA_ROOT = path.resolve(config.mediaRoot);
 
 /**
@@ -18,36 +17,63 @@ const validateFilePath = (filePath: string): boolean => {
 
 // Get all tracks with optional pagination (skip/take)
 export async function get_all(req: Request, res: Response) {
-    const skip = req.query.skip ? Number(req.query.skip) : undefined; // Number of records to skip
-    const take = req.query.take ? Number(req.query.take) : undefined; // Number of records to take
+    const skip = req.query.skip ? Number(req.query.skip) : undefined;
+    const take = req.query.take ? Number(req.query.take) : undefined;
 
     const tracks = await prisma.track.findMany({
         ...(skip !== undefined && { skip }),
         ...(take !== undefined && { take }),
-        orderBy: { title: 'asc' } // Sort tracks by title
+        orderBy: { title: 'asc' },
+        include: {
+            artists: {
+                include: {
+                    artist: {
+                        select: { id: true, name: true }
+                    }
+                }
+            },
+            albums: {
+                include: {
+                    album: {
+                        select: { id: true, title: true }
+                    }
+                }
+            }
+        }
     });
 
-    const trackCount = await prisma.track.count(); // Total number of tracks
-    res.set('X-Total-Count', trackCount.toString()); // Set total count in response header
+    const trackCount = await prisma.track.count();
+    res.set('X-Total-Count', trackCount.toString());
 
-    res.json({ tracks }); // Return tracks as JSON
+    // Format tracks to include artist names and album titles
+    const formattedTracks = tracks.map(track => ({
+        ...track,
+        artists: track.artists.map(a => a.artist),
+        albums: track.albums.map(a => a.album)
+    }));
+
+    res.json({ tracks: formattedTracks });
 }
 
 // Get a single track by ID
 export async function get_one(req: Request, res: Response) {
     const trackId = Number(req.params.track_id);
-    
+
     const track = await prisma.track.findUnique({
         where: { id: trackId },
         include: {
             artists: {
                 include: {
-                    artist: true
+                    artist: {
+                        select: { id: true, name: true }
+                    }
                 }
             },
             albums: {
                 include: {
-                    album: true
+                    album: {
+                        select: { id: true, title: true }
+                    }
                 }
             }
         }
@@ -57,7 +83,14 @@ export async function get_one(req: Request, res: Response) {
         throw new NotFoundError('Track not found');
     }
 
-    res.json({ track });
+    // Format track to include artist names and album titles
+    const formattedTrack = {
+        ...track,
+        artists: track.artists.map(a => a.artist),
+        albums: track.albums.map(a => a.album)
+    };
+
+    res.json({ tracks: formattedTrack });
 }
 
 // Stream a single track by ID with improved error handling and security
@@ -124,7 +157,7 @@ export async function stream_one(req: Request, res: Response): Promise<void> {
 
             // Validate range bounds
             if (start >= stat.size || end >= stat.size || start > end) {
-                res.status(416).json({ 
+                res.status(416).json({
                     error: 'Range not satisfiable',
                     details: `Requested range ${start}-${end}, file size: ${stat.size}`
                 });
@@ -144,9 +177,9 @@ export async function stream_one(req: Request, res: Response): Promise<void> {
             });
 
             // Create read stream for specified range
-            readStream = (await import('fs')).createReadStream(trackFilePath, { 
-                start: start, 
-                end: end 
+            readStream = (await import('fs')).createReadStream(trackFilePath, {
+                start: start,
+                end: end
             });
         } else {
             // Handle full file request
@@ -181,7 +214,7 @@ export async function stream_one(req: Request, res: Response): Promise<void> {
     } catch (error) {
         console.error('Error in stream_one:', error);
         if (!res.headersSent) {
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Internal server error',
                 details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
             });
