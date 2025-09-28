@@ -26,12 +26,20 @@ export async function get_all(req: Request, res: Response) {
 export async function get_one(req: Request, res: Response) {
     const artist = await prisma.artist.findUnique({
         where: { id: Number(req.params.artist_id) },
+        include: { 
+            albums: { include: { album: { select: { id: true, title: true } } } }
+        }
     });
     if (!artist) {
         throw new NotFoundError('Artist_id not found');
-    } else {
-        res.json({ artist });
     }
+    const formattedArtist = {
+        id: artist.id,
+        name: artist.id,
+        albums: artist.albums.map(a => a.album),
+    };
+
+    res.json({ artist: formattedArtist });
 }
 
 // Get all tracks for a specific artist with optional pagination
@@ -39,12 +47,13 @@ export async function get_tracks(req: Request, res: Response) {
     const skip = req.query.skip ? Number(req.query.skip) : undefined;
     const take = req.query.take ? Number(req.query.take) : undefined;
 
-    // Fetch tracks linked to artist
+    // Fetch tracks linked to artist, exclude 'filepath' field
     const tracks = await prisma.track.findMany({
         ...(skip !== undefined && { skip }),
         ...(take !== undefined && { take }),
         where: { artists: { some: { artistId: Number(req.params.artist_id) } } },
-        orderBy: { title: 'asc' }
+        orderBy: { title: 'asc' },
+        select: { id: true, title: true }
     });
 
     // Get total track count for pagination

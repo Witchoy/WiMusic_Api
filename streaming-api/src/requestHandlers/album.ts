@@ -27,14 +27,25 @@ export async function get_all(req: Request, res: Response) {
 export async function get_one(req: Request, res: Response) {
     const album = await prisma.album.findUnique({
         where: { id: Number(req.params.album_id) },
+        include: {
+            artists: { include: { artist: { select: { id: true, name: true } } } },
+            tracks: { include: { track: { select: { id: true, title: true } } } }
+        }
     });
+
     if (!album) {
-        // Throw error if album not found
         throw new NotFoundError('Album_id not found');
-    } else {
-        // Respond with album
-        res.json({ album });
     }
+
+    // Reformat the response to strip join table fields
+    const formattedAlbum = {
+        id: album.id,
+        title: album.title,
+        artists: album.artists.map(a => a.artist), // only { id, name }
+        tracks: album.tracks.map(t => t.track)     // only { id, title }
+    };
+
+    res.json({ album: formattedAlbum });
 }
 
 // Create a single album

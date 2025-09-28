@@ -26,32 +26,21 @@ export async function get_all(req: Request, res: Response) {
         ...(take !== undefined && { take }),
         orderBy: { title: 'asc' },
         include: {
-            artists: {
-                include: {
-                    artist: {
-                        select: { id: true, name: true }
-                    }
-                }
-            },
-            albums: {
-                include: {
-                    album: {
-                        select: { id: true, title: true }
-                    }
-                }
-            }
+            artists: { include: { artist: { select: { id: true, name: true } } } },
+            albums: { include: { album: { select: { id: true, title: true } } } }
         }
     });
 
     const trackCount = await prisma.track.count();
     res.set('X-Total-Count', trackCount.toString());
 
-    // Format tracks to include artist names and album titles
-    const formattedTracks = tracks.map(track => ({
-        ...track,
-        artists: track.artists.map(a => a.artist),
-        albums: track.albums.map(a => a.album)
-    }));
+    // Format tracks to include artist names and album titles 
+    const formattedTracks = tracks.map(({filePath, ...track}) => ({
+         ...track, 
+         artists: track.artists.map(a => a.artist), 
+         albums: track.albums.map(a => a.album) 
+        })
+    );
 
     res.json({ tracks: formattedTracks });
 }
@@ -63,20 +52,8 @@ export async function get_one(req: Request, res: Response) {
     const track = await prisma.track.findUnique({
         where: { id: trackId },
         include: {
-            artists: {
-                include: {
-                    artist: {
-                        select: { id: true, name: true }
-                    }
-                }
-            },
-            albums: {
-                include: {
-                    album: {
-                        select: { id: true, title: true }
-                    }
-                }
-            }
+            artists: { include: { artist: { select: { id: true, name: true } } } },
+            albums: { include: { album: { select: { id: true, title: true } } } }
         }
     });
 
@@ -85,8 +62,9 @@ export async function get_one(req: Request, res: Response) {
     }
 
     // Format track to include artist names and album titles
+    const { filePath, ...rest } = track; // exclude the filepath field
     const formattedTrack = {
-        ...track,
+        ...rest,
         artists: track.artists.map(a => a.artist),
         albums: track.albums.map(a => a.album)
     };

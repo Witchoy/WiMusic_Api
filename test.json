@@ -1,0 +1,38 @@
+{
+    "tracks": [
+        {
+            "id": 4,
+            "title": "Alien Blues",
+            "filePath": "./media/alien-blues.mp3",
+            "artists": [
+                {
+                    "id": 2,
+                    "name": "Vundabar"
+                }
+            ],
+            "albums": [
+                {
+                    "id": 3,
+                    "title": "Either Light"
+                }
+            ]
+        },
+        {
+            "id": 1,
+            "title": "Chop Suey!",
+            "filePath": "./media/chop-suey.mp3",
+            "artists": [
+                {
+                    "id": 1,
+                    "name": "System Of A Down"
+                }
+            ],
+            "albums": [
+                {
+                    "id": 1,
+                    "title": "Toxicity"
+                }
+            ]
+        }
+    ]
+}
