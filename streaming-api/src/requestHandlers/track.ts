@@ -97,9 +97,13 @@ export async function get_one(req: Request, res: Response) {
 // Create a single track and connect it to the artist and album
 export async function create_one(req: Request, res: Response) {
     try {
-        // Generate a unique filename for the track
-        const uniqueId = crypto.randomUUID();
-        const filePath = `./media/${uniqueId}.mp3`;
+        // Check if file was uploaded
+        if (!req.file) {
+            return res.status(400).json({ error: "MP3 file is required" });
+        }
+
+        // Use the actual uploaded file path
+        const filePath = req.file.path;
 
         // First create the track
         const newTrack = await prisma.track.create({
@@ -113,22 +117,30 @@ export async function create_one(req: Request, res: Response) {
         await prisma.artistTrack.create({
             data: {
                 trackId: newTrack.id,
-                artistId: req.body.artist_id
+                artistId: parseInt(req.body.artist_id)
             }
         });
 
         // Then create the track-album relationship
-        if (req.body.hasAlbum === true) {
+        if (req.body.hasAlbum === 'true') {
             await prisma.trackAlbum.create({
                 data: {
                     trackId: newTrack.id,
-                    albumId: req.body.album_id
+                    albumId: parseInt(req.body.album_id)
                 }
-            })
+            });
         }
 
         res.status(201).json({ newTrack });
     } catch (err: unknown) {
+        // Clean up uploaded file if database operation fails
+        if (req.file && req.file.path) {
+            try {
+                await fs.unlink(req.file.path);
+            } catch (unlinkError) {
+                console.error('Failed to clean up uploaded file:', unlinkError);
+            }
+        }
         throw err;
     }
 }

@@ -8,7 +8,8 @@ export const AlbumParams = object({
 });
 
 export const AlbumCreateBody = object({
-    title: string()
+    title: string(),
+    artist_id: number()
 });
 
 export const AlbumQuery = object({

@@ -2,6 +2,7 @@ import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "./utils/error.js";
 import { config } from './utils/config.js';
+import { configurationStorage } from "./middleware/upload.js";
 
 // Import request handlers
 import * as track from './requestHandlers/track.js';
@@ -9,15 +10,16 @@ import * as artist from './requestHandlers/artist.js';
 import * as album from './requestHandlers/album.js';
 
 // Import validation middleware
-import { createValidateParams, createValidateBody, createValidateQuery } from './validation/middleware.js';
+import { createValidateParams, createValidateBody, createValidateQuery } from './middleware/middleware.js';
 
 // Import validation schemas
-import { TrackParams, TrackCreateBody, TrackConnectBody, TrackQuery } from './validation/track.js';
+import { transformFormData, TrackParams, TrackCreateBody, TrackConnectBody, TrackQuery } from './validation/track.js';
 import { ArtistParams, ArtistCreateBody, ArtistQuery } from './validation/artist.js';
 import { AlbumParams, AlbumCreateBody, AlbumQuery } from './validation/album.js';
 
 const app = express();
 const port = config.port;
+const multer = configurationStorage();
 
 // ========================================
 // MIDDLEWARE CONFIGURATION
@@ -50,7 +52,7 @@ app.get("/", (req: Request, res: Response) => {
 
 app.route("/tracks")
 	.get(createValidateQuery(TrackQuery), track.get_all)
-	.post(createValidateBody(TrackCreateBody), track.create_one);
+	.post(multer.single("file"), transformFormData, createValidateBody(TrackCreateBody), track.create_one);
 
 app.route("/tracks/:track_id")
 	.all(createValidateParams(TrackParams))
