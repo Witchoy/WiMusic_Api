@@ -84,4 +84,4 @@ curl -X POST http://localhost:3000/tracks \
 
 ## License
 
-ISC
+View [LICENCE.md](LICENCE.md)
