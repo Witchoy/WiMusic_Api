@@ -35,7 +35,7 @@ export async function get_all(req: Request, res: Response) {
     res.set('X-Total-Count', trackCount.toString());
 
     // Format tracks to include artist names and album titles 
-    const formattedTracks = tracks.map(({ filePath, ...track }) => ({
+    const formattedTracks = tracks.map(track => ({
         ...track,
         artists: track.artists.map(a => a.artist),
         albums: track.albums.map(a => a.album)
@@ -62,9 +62,8 @@ export async function get_one(req: Request, res: Response) {
     }
 
     // Format track to include artist names and album titles
-    const { filePath, ...rest } = track; // exclude the filepath field
     const formattedTrack = {
-        ...rest,
+        ...track,
         artists: track.artists.map(a => a.artist),
         albums: track.albums.map(a => a.album)
     };
@@ -94,34 +93,90 @@ export async function create_one(req: Request, res: Response) {
             }
         });
 
+        // Prepare track data with optional fields
+        const trackData: any = {
+            title: req.body.title,
+            file: { connect: { id: newFile.id } }
+        };
+
+        // Add optional fields if provided
+        if (req.body.duration) {
+            trackData.duration = parseInt(req.body.duration);
+        }
+
         // Then create the track
         const newTrack = await prisma.track.create({
-            data: {
-                title: req.body.title,
-                filePath: filePath,
-                file: { connect: { id: newFile.id } }
-            }
+            data: trackData
         });
 
         // Then create the artist-track relationship
+        const artistTrackData: any = {
+            trackId: newTrack.id,
+            artistId: parseInt(req.body.artist_id)
+        };
+
+        // Add optional role if provided
+        if (req.body.artist_role) {
+            artistTrackData.role = req.body.artist_role;
+        }
+
         await prisma.artistTrack.create({
-            data: {
-                trackId: newTrack.id,
-                artistId: parseInt(req.body.artist_id)
-            }
+            data: artistTrackData
         });
 
         // Then create the track-album relationship
         if (req.body.hasAlbum === 'true') {
+            const albumId = parseInt(req.body.album_id);
+
+            // Get the highest track number for this album to determine the next position
+            const lastTrackInAlbum = await prisma.trackAlbum.findFirst({
+                where: { albumId: albumId },
+                orderBy: { position: 'desc' },
+                select: { position: true }
+            });
+
+            const nextTrackNumber = (lastTrackInAlbum?.position ?? 0) + 1;
+
+            const trackAlbumData: any = {
+                trackId: newTrack.id,
+                albumId: albumId,
+                trackNumber: nextTrackNumber
+            };
+
+            // Add optional disk number if provided
+            if (req.body.diskNumber) {
+                trackAlbumData.diskNumber = parseInt(req.body.diskNumber);
+            }
+
+            // Add custom track number if provided (overrides auto-increment)
+            if (req.body.trackNumber) {
+                trackAlbumData.trackNumber = parseInt(req.body.trackNumber);
+            }
+
             await prisma.trackAlbum.create({
-                data: {
-                    trackId: newTrack.id,
-                    albumId: parseInt(req.body.album_id)
-                }
+                data: trackAlbumData
             });
         }
 
-        res.status(201).json({ newTrack });
+        // Return the created track with related data
+        const createdTrack = await prisma.track.findUnique({
+            where: { id: newTrack.id },
+            include: {
+                file: true,
+                artists: {
+                    include: {
+                        artist: true
+                    }
+                },
+                albums: {
+                    include: {
+                        album: true
+                    }
+                }
+            }
+        });
+
+        res.status(201).json({ track: createdTrack });
     } catch (err: unknown) {
         // Clean up uploaded file if database operation fails
         if (req.file && req.file.path) {
@@ -131,7 +186,12 @@ export async function create_one(req: Request, res: Response) {
                 console.error('Failed to clean up uploaded file:', unlinkError);
             }
         }
-        throw err;
+        
+        console.error('Error creating track:', err);
+        res.status(500).json({ 
+            error: "Failed to create track",
+            details: err instanceof Error ? err.message : "Unknown error"
+        });
     }
 }
 
@@ -155,11 +215,19 @@ export async function connect_one(req: Request, res: Response) {
             return res.status(409).json({ error: "Track is already connected to this album" });
         }
 
+        // Fetch the number of trackl to calculate the position
+        const album = await prisma.album.findUnique({
+            where: { id: albumId },
+            select: { trackNumber: true }
+        });
+        const position = album?.trackNumber ?? 0; // fallback to 0 if not found
+
         // Create the relationship (foreign key constraints will handle existence validation)
         await prisma.trackAlbum.create({
             data: {
                 trackId: trackId,
-                albumId: albumId
+                albumId: albumId,
+                position: position + 1
             }
         });
 

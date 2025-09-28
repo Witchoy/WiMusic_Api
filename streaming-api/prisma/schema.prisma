@@ -11,70 +11,149 @@ datasource db {
 }
 
 model Track {
-    id    Int    @id @default(autoincrement())
-    title String
-    filePath String @unique
+    id          Int @id @default(autoincrement())
+    title       String
+    duration    Int? // Duration in seconds
 
-    fileId Int?
-    file File? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
 
-    artists ArtistTrack[]
-    albums  TrackAlbum[]
+    fileId      Int?
+    file        File? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+    artists     ArtistTrack[]
+    albums      TrackAlbum[]
+    playlists   PlaylistTrack[]
+    trackGenres TrackGenre[]
 }
 
 model Artist {
-    id   Int    @id @default(autoincrement())
-    name String
+    id          Int @id @default(autoincrement())
+    name        String @unique
+    biography   String?
+    country     String?
 
-    tracks ArtistTrack[]
-    albums ArtistAlbum[]
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    tracks      ArtistTrack[]
+    albums      ArtistAlbum[]
 }
 
 model Album {
-    id   Int    @id @default(autoincrement())
-    title String
+    id          Int @id @default(autoincrement())
+    title       String
+    releaseDate Int?
+    trackNumber Int?
 
-    tracks  TrackAlbum[]
-    artists ArtistAlbum[]
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    tracks      TrackAlbum[]
+    artists     ArtistAlbum[]
+    albumGenres AlbumGenre[]
+}
+
+model Genre {
+    id          Int @id @default(autoincrement())
+    name        String @unique
+    
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    
+    albums      AlbumGenre[]
+    tracks      TrackGenre[]
+
+    parentId    Int?
+    parent      Genre? @relation("GenreToParent", fields: [parentId], references: [id])
+    children    Genre[] @relation("GenreToParent")
+}
+
+model Playlist {
+    id          Int @id @default(autoincrement())
+    name        String
+
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    tracks      PlaylistTrack[]
 }
 
 model File {
-    id           Int      @id @default(autoincrement())
-    filename     String   @unique  
-    path         String   @unique
-    mimeType     String
-    size         Int
-    uploadedAt   DateTime @default(now())
+    id          Int @id @default(autoincrement())
+    filename    String @unique  
+    path        String @unique
+    mimeType    String
+    size        Int
+    uploadedAt  DateTime @default(now())
     
-    tracks       Track[]
+    tracks      Track[]
 }
 
 model ArtistTrack {
-    track   Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-    trackId Int
+    track       Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+    trackId     Int
 
-    artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
-    artistId Int
+    artist      Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    artistId    Int
 
     @@id([trackId, artistId])
 }
 
 model TrackAlbum {
-    track   Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
-    trackId Int
+    track       Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+    trackId     Int
 
-    album   Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
-    albumId Int
+    album       Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+    albumId     Int
+
+    position  Int // Order in album
+    addedAt   DateTime @default(now())
 
     @@id([trackId, albumId])
 }
 
 model ArtistAlbum {
-    artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
-    artistId Int
+    artist      Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+    artistId    Int
 
+    album       Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+    albumId     Int
+
+    @@id([artistId, albumId])
+}
+
+model PlaylistTrack {
+    playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+    playlistId Int
+
+    track   Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+    trackId Int
+
+    position  Int // Order in playlist
+    addedAt   DateTime @default(now())
+
+    @@id([playlistId, trackId])
+    @@unique([playlistId, position])
+}
+
+model AlbumGenre {
     album   Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
     albumId Int
 
-    @@id([artistId, albumId])
+    genre   Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+    genreId Int
+
+    @@id([albumId, genreId])
+}
+
+model TrackGenre {
+    track   Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+    trackId Int
+
+    genre   Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+    genreId Int
+
+    @@id([trackId, genreId])
+
 }

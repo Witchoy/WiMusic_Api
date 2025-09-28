@@ -8,7 +8,9 @@ export const ArtistParams = object({
 });
 
 export const ArtistCreateBody = object({
-    name: string()
+    name: string(),
+    biography: optional(string()),
+    country: optional(string())
 });
 
 export const ArtistQuery = object({

@@ -54,7 +54,7 @@ export async function create_one(req: Request, res: Response) {
         // First create the album
         const newAlbum = await prisma.album.create({
             data: {
-                title: req.body.title
+                title: req.body.title,
             }
         });
 

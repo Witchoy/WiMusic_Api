@@ -18,8 +18,10 @@ export const TrackParams = object({
 export const TrackCreateBody = object({
     title: string(),
     artist_id: refine(number(), 'positive', (value) => value > 0),
+    duration: optional(refine(number(), 'positive', (value) => value > 0)),
     hasAlbum: optional(boolean()),
     album_id: optional(refine(number(), 'positive', (value) => value > 0))
+
 });
 
 export const TrackConnectBody = object({
