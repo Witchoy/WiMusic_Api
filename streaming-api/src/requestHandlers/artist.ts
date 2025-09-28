@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { NotFoundError } from "../utils/error.js";
 import { prisma } from "../utils/db.js";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 // Get all artists with optional pagination
 export async function get_all(req: Request, res: Response) {
@@ -78,5 +79,36 @@ export async function get_albums(req: Request, res: Response) {
         throw new NotFoundError('No albums found for this artist');
     } else {
         res.json({ albums });
+    }
+}
+
+// Create a single artist
+export async function create_one(req: Request, res: Response) {
+    try {
+        // Create the artist
+        const newArtist = await prisma.artist.create({
+            data: {
+                name: req.body.name
+            }
+        })
+
+        res.status(201).json({ newArtist });
+    } catch (err: unknown) {
+        throw err;
+    }
+}
+
+// Delete a single artist
+export async function delete_one(req: Request, res: Response) {
+    try {
+        await prisma.artist.delete({
+            where: { id: Number(req.params.artist_id) }
+        })
+        res.status(204).send();
+    } catch (err: unknown) {
+        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+            throw new NotFoundError('Artist not found');
+        }
+        throw err;
     }
 }

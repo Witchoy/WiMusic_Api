@@ -36,30 +36,30 @@ model Album {
 }
 
 model ArtistTrack {
-    track   Track @relation(fields: [trackId], references: [id])
+    track   Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
     trackId Int
 
-    artist   Artist @relation(fields: [artistId], references: [id])
+    artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
     artistId Int
 
     @@id([trackId, artistId])
 }
 
 model TrackAlbum {
-    track   Track @relation(fields: [trackId], references: [id])
+    track   Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
     trackId Int
 
-    album   Album @relation(fields: [albumId], references: [id])
+    album   Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
     albumId Int
 
     @@id([trackId, albumId])
 }
 
 model ArtistAlbum {
-    artist   Artist @relation(fields: [artistId], references: [id])
+    artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
     artistId Int
 
-    album   Album @relation(fields: [albumId], references: [id])
+    album   Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
     albumId Int
 
     @@id([artistId, albumId])

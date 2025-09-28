@@ -1,3 +1,15 @@
+# Your existing content
 node_modules
 .vscode
+media/*
 /src/generated/prisma
+
+# Critical additions
+.env
+.env.*
+dist/
+build/
+*.db
+*.sqlite
+*.log
+.DS_Store

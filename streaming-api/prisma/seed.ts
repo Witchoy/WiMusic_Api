@@ -17,7 +17,8 @@ async function main() {
 		console.log('🎤 Creating artists...');
 		await prisma.artist.createMany({
 			data: [
-				{ name: 'Alex MakeMusic' },
+				{ name: 'System Of A Down' },
+				{ name: 'Vundabar' },
 			]
 		});
 
@@ -25,7 +26,9 @@ async function main() {
 		console.log('💽 Creating albums...');
 		await prisma.album.createMany({
 			data: [
-				{ title: 'nothing' },
+				{ title: 'Toxicity' }, // System Of A Down
+				{ title: 'Antics' }, // Vundabar Album 1
+				{ title: 'Either Light' }, // Vundabar Album 2
 			]
 		});
 
@@ -33,7 +36,16 @@ async function main() {
 		console.log('🎵 Creating tracks...');
 		await prisma.track.createMany({
 			data: [
-				{ title: 'Running Night', filePath: './media/running-night.mp3' },
+				// System Of A Down - Toxicity (2 songs)
+				{ title: 'Chop Suey!', filePath: './media/chop-suey.mp3' },
+				{ title: 'Toxicity', filePath: './media/toxicity.mp3' },
+				
+				// Vundabar - Antics (1 song)
+				{ title: 'Kalidasa', filePath: './media/kalidasa.mp3' },
+				
+				// Vundabar - Either Light (2 songs)
+				{ title: 'Alien Blues', filePath: './media/alien-blues.mp3' },
+				{ title: 'Cotton Kid', filePath: './media/cotton-kid.mp3' },
 			]
 		});
 
@@ -48,9 +60,27 @@ async function main() {
 		// Artist-Track relationships
 		await prisma.artistTrack.createMany({
 			data: [
+				// System Of A Down tracks
 				{
-					artistId: artists.find(a => a.name === 'Alex MakeMusic')!.id,
-					trackId: tracks.find(t => t.title === 'Running Night')!.id
+					artistId: artists.find(a => a.name === 'System Of A Down')!.id,
+					trackId: tracks.find(t => t.title === 'Chop Suey!')!.id
+				},
+				{
+					artistId: artists.find(a => a.name === 'System Of A Down')!.id,
+					trackId: tracks.find(t => t.title === 'Toxicity')!.id
+				},
+				// Vundabar tracks
+				{
+					artistId: artists.find(a => a.name === 'Vundabar')!.id,
+					trackId: tracks.find(t => t.title === 'Kalidasa')!.id
+				},
+				{
+					artistId: artists.find(a => a.name === 'Vundabar')!.id,
+					trackId: tracks.find(t => t.title === 'Alien Blues')!.id
+				},
+				{
+					artistId: artists.find(a => a.name === 'Vundabar')!.id,
+					trackId: tracks.find(t => t.title === 'Cotton Kid')!.id
 				}
 			]
 		});
@@ -58,9 +88,28 @@ async function main() {
 		// Track-Album relationships
 		await prisma.trackAlbum.createMany({
 			data: [
+				// System Of A Down - Toxicity album
 				{
-					trackId: tracks.find(t => t.title === 'Running Night')!.id,
-					albumId: albums.find(a => a.title === 'nothing')!.id
+					trackId: tracks.find(t => t.title === 'Chop Suey!')!.id,
+					albumId: albums.find(a => a.title === 'Toxicity')!.id
+				},
+				{
+					trackId: tracks.find(t => t.title === 'Toxicity')!.id,
+					albumId: albums.find(a => a.title === 'Toxicity')!.id
+				},
+				// Vundabar - Antics album
+				{
+					trackId: tracks.find(t => t.title === 'Kalidasa')!.id,
+					albumId: albums.find(a => a.title === 'Antics')!.id
+				},
+				// Vundabar - Either Light album
+				{
+					trackId: tracks.find(t => t.title === 'Alien Blues')!.id,
+					albumId: albums.find(a => a.title === 'Either Light')!.id
+				},
+				{
+					trackId: tracks.find(t => t.title === 'Cotton Kid')!.id,
+					albumId: albums.find(a => a.title === 'Either Light')!.id
 				}
 			]
 		});
@@ -68,15 +117,29 @@ async function main() {
 		// Artist-Album relationships
 		await prisma.artistAlbum.createMany({
 			data: [
+				// System Of A Down - Toxicity
 				{
-					artistId: artists.find(a => a.name === 'Alex MakeMusic')!.id,
-					albumId: albums.find(a => a.title === 'nothing')!.id
+					artistId: artists.find(a => a.name === 'System Of A Down')!.id,
+					albumId: albums.find(a => a.title === 'Toxicity')!.id
+				},
+				// Vundabar - Antics
+				{
+					artistId: artists.find(a => a.name === 'Vundabar')!.id,
+					albumId: albums.find(a => a.title === 'Antics')!.id
+				},
+				// Vundabar - Either Light
+				{
+					artistId: artists.find(a => a.name === 'Vundabar')!.id,
+					albumId: albums.find(a => a.title === 'Either Light')!.id
 				}
 			]
 		});
 
 		console.log('✅ Database seeded successfully!');
 		console.log(`Created ${artists.length} artists, ${albums.length} albums, ${tracks.length} tracks`);
+		console.log('🎵 Artists: System Of A Down, Vundabar');
+		console.log('💽 Albums: Toxicity, Antics, Either Light');
+		console.log('🎶 Tracks: Chop Suey!, Toxicity, Kalidasa, Alien Blues, Cotton Kid');
 
 	} catch (error) {
 		console.error('❌ Error during seeding:', error);

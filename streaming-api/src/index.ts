@@ -1,8 +1,6 @@
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "./utils/error.js";
-import { assert, object, optional, refine, string } from "superstruct";
-import validator from "validator";
 import { config } from './utils/config.js';
 
 // Import request handlers
@@ -10,7 +8,14 @@ import * as track from './requestHandlers/track.js';
 import * as artist from './requestHandlers/artist.js';
 import * as album from './requestHandlers/album.js';
 
-const { isInt } = validator;
+// Import validation middleware
+import { createValidateParams, createValidateBody, createValidateQuery } from './validation/middleware.js';
+
+// Import validation schemas
+import { TrackParams, TrackCreateBody, TrackConnectBody, TrackQuery } from './validation/track.js';
+import { ArtistParams, ArtistCreateBody, ArtistQuery } from './validation/artist.js';
+import { AlbumParams, AlbumCreateBody, AlbumQuery } from './validation/album.js';
+
 const app = express();
 const port = config.port;
 
@@ -23,28 +28,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 	next();
 });
 app.use(express.json());
-
-// ========================================
-// VALIDATION SCHEMAS
-// ========================================
-
-export const ReqParams = object({
-	artist_id: optional(refine(string(), 'int', (value) => isInt(value))),
-	track_id: optional(refine(string(), 'int', (value) => isInt(value))),
-	album_id: optional(refine(string(), 'int', (value) => isInt(value)))
-});
-
-const validateParams = (req: Request, res: Response, next: NextFunction) => {
-	try {
-		assert(req.params, ReqParams);
-		next();
-	} catch (error) {
-		res.status(400).json({
-			error: 'Invalid parameters',
-			details: error instanceof Error ? error.message : 'Validation failed'
-		});
-	}
-};
 
 // ========================================
 // ROUTES DEFINITION
@@ -66,14 +49,17 @@ app.get("/", (req: Request, res: Response) => {
 // ========================================
 
 app.route("/tracks")
-	.get(track.get_all);
+	.get(createValidateQuery(TrackQuery), track.get_all)
+	.post(createValidateBody(TrackCreateBody), track.create_one);
 
 app.route("/tracks/:track_id")
-	.all(validateParams)
-	.get(track.get_one);
+	.all(createValidateParams(TrackParams))
+	.get(track.get_one)
+	.delete(track.delete_one)
+	.patch(createValidateBody(TrackConnectBody), track.connect_one);
 
 app.route("/tracks/:track_id/stream")
-	.all(validateParams)
+	.all(createValidateParams(TrackParams))
 	.get(track.stream_one)
 
 // ========================================
@@ -81,18 +67,20 @@ app.route("/tracks/:track_id/stream")
 // ========================================
 
 app.route("/artists")
-	.get(artist.get_all);
+	.get(createValidateQuery(ArtistQuery), artist.get_all)
+	.post(createValidateBody(ArtistCreateBody), artist.create_one);
 
 app.route("/artists/:artist_id")
-	.all(validateParams)
-	.get(artist.get_one);
+	.all(createValidateParams(ArtistParams))
+	.get(artist.get_one)
+	.delete(artist.delete_one);
 
 app.route("/artists/:artist_id/tracks")
-	.all(validateParams)
+	.all(createValidateParams(ArtistParams))
 	.get(artist.get_tracks);
 
 app.route("/artists/:artist_id/albums")
-	.all(validateParams)
+	.all(createValidateParams(ArtistParams))
 	.get(artist.get_albums);
 
 // ========================================
@@ -100,11 +88,13 @@ app.route("/artists/:artist_id/albums")
 // ========================================
 
 app.route("/albums")
-	.get(album.get_all);
+	.get(createValidateQuery(AlbumQuery), album.get_all)
+	.post(createValidateBody(AlbumCreateBody), album.create_one);
 
 app.route("/albums/:album_id")
-	.all(validateParams)
-	.get(album.get_one);
+	.all(createValidateParams(AlbumParams))
+	.get(album.get_one)
+	.delete(album.delete_one);
 
 // ========================================
 // ERROR HANDLING MIDDLEWARE

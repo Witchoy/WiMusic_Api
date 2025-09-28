@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { NotFoundError } from "../utils/error.js";
 import { prisma } from "../utils/db.js";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 // Handler to get all albums, with optional pagination
 export async function get_all(req: Request, res: Response) {
@@ -33,5 +34,44 @@ export async function get_one(req: Request, res: Response) {
     } else {
         // Respond with album
         res.json({ album });
+    }
+}
+
+// Create a single album
+export async function create_one(req: Request, res: Response) {
+    try {
+        // First create the album
+        const newAlbum = await prisma.album.create({
+            data: {
+                title: req.body.title
+            }
+        });
+
+        // Then create the artist-album relationship
+        await prisma.artistAlbum.create({
+            data: {
+                albumId: newAlbum.id,
+                artistId: req.body.artist_id
+            }
+        });
+
+        res.status(201).json({ newAlbum });
+    } catch (err: unknown) {
+        throw err;
+    }
+}
+
+// Delete a single album
+export async function delete_one(req: Request, res: Response) {
+    try {
+        await prisma.album.delete({
+            where: { id: Number(req.params.album_id) }
+        })
+        res.status(204).send();
+    } catch (err: unknown) {
+        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+            throw new NotFoundError('Album not found');
+        }
+        throw err;
     }
 }

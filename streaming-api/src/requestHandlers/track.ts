@@ -4,6 +4,7 @@ import { prisma } from "../utils/db.js";
 import { promises as fs } from 'fs';
 import path from 'path';
 import { config } from '../utils/config.js';
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 const MEDIA_ROOT = path.resolve(config.mediaRoot);
 
@@ -91,6 +92,102 @@ export async function get_one(req: Request, res: Response) {
     };
 
     res.json({ tracks: formattedTrack });
+}
+
+// Create a single track and connect it to the artist and album
+export async function create_one(req: Request, res: Response) {
+    try {
+        // Generate a unique filename for the track
+        const uniqueId = crypto.randomUUID();
+        const filePath = `./media/${uniqueId}.mp3`;
+
+        // First create the track
+        const newTrack = await prisma.track.create({
+            data: {
+                title: req.body.title,
+                filePath: filePath
+            }
+        });
+
+        // Then create the artist-track relationship
+        await prisma.artistTrack.create({
+            data: {
+                trackId: newTrack.id,
+                artistId: req.body.artist_id
+            }
+        });
+
+        // Then create the track-album relationship
+        if (req.body.hasAlbum === true) {
+            await prisma.trackAlbum.create({
+                data: {
+                    trackId: newTrack.id,
+                    albumId: req.body.album_id
+                }
+            })
+        }
+
+        res.status(201).json({ newTrack });
+    } catch (err: unknown) {
+        throw err;
+    }
+}
+
+// Connect a single track to an album
+export async function connect_one(req: Request, res: Response) {
+    try {
+        const trackId = Number(req.params.track_id);
+        const albumId = req.body.album_id;
+
+        // Check if relationship already exists
+        const existingRelation = await prisma.trackAlbum.findUnique({
+            where: {
+                trackId_albumId: {
+                    trackId: trackId,
+                    albumId: albumId
+                }
+            }
+        });
+
+        if (existingRelation) {
+            return res.status(409).json({ error: "Track is already connected to this album" });
+        }
+
+        // Create the relationship (foreign key constraints will handle existence validation)
+        await prisma.trackAlbum.create({
+            data: {
+                trackId: trackId,
+                albumId: albumId
+            }
+        });
+
+        res.status(201).json({
+            message: "Track added to album successfully",
+            trackId: trackId,
+            albumId: albumId
+        });
+
+    } catch (err: unknown) {
+        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2003') {
+            throw new NotFoundError('Track or Album not found');
+        }
+        throw err;
+    }
+}
+
+// Delete a single track
+export async function delete_one(req: Request, res: Response) {
+    try {
+        await prisma.track.delete({
+            where: { id: Number(req.params.track_id) }
+        })
+        res.status(204).send();
+    } catch (err: unknown) {
+        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+            throw new NotFoundError('Track not found');
+        }
+        throw err;
+    }
 }
 
 // Stream a single track by ID with improved error handling and security
