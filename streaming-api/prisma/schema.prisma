@@ -15,6 +15,9 @@ model Track {
     title String
     filePath String @unique
 
+    fileId Int?
+    file File? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
     artists ArtistTrack[]
     albums  TrackAlbum[]
 }
@@ -33,6 +36,17 @@ model Album {
 
     tracks  TrackAlbum[]
     artists ArtistAlbum[]
+}
+
+model File {
+    id           Int      @id @default(autoincrement())
+    filename     String   @unique  
+    path         String   @unique
+    mimeType     String
+    size         Int
+    uploadedAt   DateTime @default(now())
+    
+    tracks       Track[]
 }
 
 model ArtistTrack {

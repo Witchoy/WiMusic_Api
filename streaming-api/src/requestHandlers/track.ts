@@ -35,11 +35,11 @@ export async function get_all(req: Request, res: Response) {
     res.set('X-Total-Count', trackCount.toString());
 
     // Format tracks to include artist names and album titles 
-    const formattedTracks = tracks.map(({filePath, ...track}) => ({
-         ...track, 
-         artists: track.artists.map(a => a.artist), 
-         albums: track.albums.map(a => a.album) 
-        })
+    const formattedTracks = tracks.map(({ filePath, ...track }) => ({
+        ...track,
+        artists: track.artists.map(a => a.artist),
+        albums: track.albums.map(a => a.album)
+    })
     );
 
     res.json({ tracks: formattedTracks });
@@ -83,11 +83,23 @@ export async function create_one(req: Request, res: Response) {
         // Use the actual uploaded file path
         const filePath = req.file.path;
 
-        // First create the track
+        // First create the file 
+        const newFile = await prisma.file.create({
+            data: {
+                filename: path.basename(filePath),
+                path: filePath,
+                mimeType: req.file.mimetype,
+                size: req.file.size,
+                uploadedAt: new Date()
+            }
+        });
+
+        // Then create the track
         const newTrack = await prisma.track.create({
             data: {
                 title: req.body.title,
-                filePath: filePath
+                filePath: filePath,
+                file: { connect: { id: newFile.id } }
             }
         });
 
@@ -194,7 +206,22 @@ export async function stream_one(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        const trackFilePath = track.filePath.toString();
+        // Check if track.fileId is valid
+        if (track.fileId === null) {
+            res.status(404).json({ error: 'Track file not associated with a file' });
+            return;
+        }
+
+        // Fetch the file relation for the track
+        const file = await prisma.file.findUnique({
+            where: { id: track.fileId },
+        });
+
+        if (!file || !file.path) {
+            res.status(404).json({ error: 'Track file not found' });
+            return;
+        }
+        const trackFilePath = file.path;
 
         // Check if file path exists in track record
         if (!trackFilePath) {
