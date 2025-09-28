@@ -5,6 +5,17 @@ async function main() {
 	console.log('🌱 Starting database seeding...');
 
 	try {
+		console.log('Nothing to seed.');
+	} catch (error) {
+		console.error('❌ Error during seeding:', error);
+		throw error;
+	}
+}
+
+async function old_seeding() {
+	console.log('🌱 Starting database seeding...');
+
+	try {
 		console.log('🧹 Clearing existing data...');
 		await prisma.artistTrack.deleteMany();
 		await prisma.trackAlbum.deleteMany();
