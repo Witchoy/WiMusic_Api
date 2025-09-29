@@ -1,16 +1,16 @@
-import type { Request, Response } from "express";
-import { NotFoundError } from "../utils/error.js";
-import { prisma } from "../utils/db.js";
-import { promises as fs } from 'fs';
-import path from 'path';
-import { config } from '../utils/config.js';
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { Prisma } from "@prisma/client"
+import type { Request, Response } from "express";
+import { promises as fs } from 'fs';
+import { NotFoundError, ValidationError, ConflictError, ForbiddenError, InternalServerError, BadRequestError } from "../utils/error.js";
+import { prisma } from "../utils/db.js";
+import { config } from '../utils/config.js';
+import path from 'path';
+import { assert, StructError } from "superstruct";
 
 const MEDIA_ROOT = path.resolve(config.mediaRoot);
 
-/**
- * Validate that file path is within allowed media directory
- */
+// Validate that file path is within allowed media directory
 const validateFilePath = (filePath: string): boolean => {
     const resolvedPath = path.resolve(filePath);
     return resolvedPath.startsWith(MEDIA_ROOT);
@@ -18,245 +18,336 @@ const validateFilePath = (filePath: string): boolean => {
 
 // Get all tracks with optional pagination (skip/take)
 export async function get_all(req: Request, res: Response) {
-    const skip = req.query.skip ? Number(req.query.skip) : undefined;
-    const take = req.query.take ? Number(req.query.take) : undefined;
+    try {
+        const filter: Prisma.TrackWhereInput = {};
+        const { title, skip, track} = req.query;
 
-    const tracks = await prisma.track.findMany({
-        ...(skip !== undefined && { skip }),
-        ...(take !== undefined && { take }),
-        orderBy: { title: 'asc' },
-        include: {
-            artists: { include: { artist: { select: { id: true, name: true } } } },
-            albums: { include: { album: { select: { id: true, title: true } } } }
+        // Filter by title if specified in the query
+        if (title) {
+            filter.title = { contains: String(title) };
         }
-    });
 
-    const trackCount = await prisma.track.count();
-    res.set('X-Total-Count', trackCount.toString());
+        const tracks = await prisma.track.findMany({
+            // skip: skip ? Number(skip) : undefined,
+            // take: skip ? Number(skip) : undefined,
+            where: filter,
+            orderBy: { title: 'asc' },
+            include: {
+                artists: { include: { artist: { select: { id: true, name: true } } } },
+                albums: { include: { album: { select: { id: true, title: true } } } }
+            }
+        });
 
-    // Format tracks to include artist names and album titles 
-    const formattedTracks = tracks.map(track => ({
-        ...track,
-        artists: track.artists.map(a => a.artist),
-        albums: track.albums.map(a => a.album)
-    })
-    );
+        const trackCount = await prisma.track.count({
+            where: filter
+        });
+        res.set('X-Total-Count', trackCount.toString());
 
-    res.json({ tracks: formattedTracks });
+        // Format tracks to include artist names and album titles 
+        const formattedTracks = tracks.map(track => ({
+            ...track,
+            artists: track.artists.map(a => a.artist),
+            albums: track.albums.map(a => a.album)
+        }));
+
+        res.status(200).json({ tracks: formattedTracks });
+    } catch (err: unknown) {
+        if (err instanceof StructError) {
+            const badRequestError = new BadRequestError('Invalid query parameters');
+            return res.status(badRequestError.status!).json({ error: badRequestError.message });
+        }
+        
+        const internalError = new InternalServerError('Failed to fetch tracks');
+        console.error('Error fetching tracks:', err);
+        res.status(internalError.status!).json({ error: internalError.message });
+    }
 }
 
 // Get a single track by ID
 export async function get_one(req: Request, res: Response) {
-    const trackId = Number(req.params.track_id);
-
-    const track = await prisma.track.findUnique({
-        where: { id: trackId },
-        include: {
-            artists: { include: { artist: { select: { id: true, name: true } } } },
-            albums: { include: { album: { select: { id: true, title: true } } } }
+    try {
+        const track = await prisma.track.findUnique({
+            where: { id: Number(req.params.track_id) },
+            include: {
+                artists: { include: { artist: { select: { id: true, name: true } } } },
+                albums: { include: { album: { select: { id: true, title: true } } } }
+            }
+        });
+        if (!track) {
+            throw new NotFoundError(`Track ${req.params.track_id} not found`);
         }
-    });
+        // Format track to include artist names and album titles
+        const formattedTrack = {
+            ...track,
+            artists: track.artists.map(a => a.artist),
+            albums: track.albums.map(a => a.album)
+        };
 
-    if (!track) {
-        throw new NotFoundError('Track not found');
+        res.status(200).json({ tracks: formattedTrack });
+    } catch (err: unknown) {
+        if (err instanceof NotFoundError) {
+            return res.status(err.status!).json({ error: err.message });
+        }
+        
+        const internalError = new InternalServerError('Failed to fetch track');
+        console.error('Error fetching track:', err);
+        res.status(internalError.status!).json({ error: internalError.message });
     }
-
-    // Format track to include artist names and album titles
-    const formattedTrack = {
-        ...track,
-        artists: track.artists.map(a => a.artist),
-        albums: track.albums.map(a => a.album)
-    };
-
-    res.json({ tracks: formattedTrack });
 }
 
 // Create a single track and connect it to the artist and album
 export async function create_one(req: Request, res: Response) {
     try {
-        // Check if file was uploaded
+
         if (!req.file) {
-            return res.status(400).json({ error: "MP3 file is required" });
+            throw new BadRequestError("MP3 file is required");
         }
 
-        // Use the actual uploaded file path
         const filePath = req.file.path;
 
-        // First create the file 
-        const newFile = await prisma.file.create({
-            data: {
-                filename: path.basename(filePath),
-                path: filePath,
-                mimeType: req.file.mimetype,
-                size: req.file.size,
-                uploadedAt: new Date()
-            }
-        });
-
-        // Prepare track data with optional fields
-        const trackData: any = {
-            title: req.body.title,
-            file: { connect: { id: newFile.id } }
-        };
-
-        // Add optional fields if provided
-        if (req.body.duration) {
-            trackData.duration = parseInt(req.body.duration);
+        // Validate and parse IDs
+        const artistId = Number(req.body.artist_id);
+        if (isNaN(artistId)) {
+            throw new BadRequestError("Invalid artist_id");
         }
 
-        // Then create the track
-        const newTrack = await prisma.track.create({
-            data: trackData
-        });
-
-        // Then create the artist-track relationship
-        const artistTrackData: any = {
-            trackId: newTrack.id,
-            artistId: parseInt(req.body.artist_id)
-        };
-
-        // Add optional role if provided
-        if (req.body.artist_role) {
-            artistTrackData.role = req.body.artist_role;
-        }
-
-        await prisma.artistTrack.create({
-            data: artistTrackData
-        });
-
-        // Then create the track-album relationship
+        let albumId: number | undefined;
         if (req.body.hasAlbum === 'true') {
-            const albumId = parseInt(req.body.album_id);
-
-            // Get the highest track number for this album to determine the next position
-            const lastTrackInAlbum = await prisma.trackAlbum.findFirst({
-                where: { albumId: albumId },
-                orderBy: { position: 'desc' },
-                select: { position: true }
-            });
-
-            const nextTrackNumber = (lastTrackInAlbum?.position ?? 0) + 1;
-
-            const trackAlbumData: any = {
-                trackId: newTrack.id,
-                albumId: albumId,
-                trackNumber: nextTrackNumber
-            };
-
-            // Add optional disk number if provided
-            if (req.body.diskNumber) {
-                trackAlbumData.diskNumber = parseInt(req.body.diskNumber);
+            albumId = Number(req.body.album_id);
+            if (isNaN(albumId)) {
+                throw new BadRequestError("Invalid album_id");
             }
-
-            // Add custom track number if provided (overrides auto-increment)
-            if (req.body.trackNumber) {
-                trackAlbumData.trackNumber = parseInt(req.body.trackNumber);
-            }
-
-            await prisma.trackAlbum.create({
-                data: trackAlbumData
-            });
         }
 
-        // Return the created track with related data
-        const createdTrack = await prisma.track.findUnique({
-            where: { id: newTrack.id },
-            include: {
-                file: true,
-                artists: {
-                    include: {
-                        artist: true
-                    }
-                },
-                albums: {
-                    include: {
-                        album: true
-                    }
+        // Wrap everything in a transaction
+        const createdTrack = await prisma.$transaction(async (tx) => {
+            // Validate that the artist exists
+            const artist = await tx.artist.findUnique({
+                where: { id: artistId }
+            });
+            if (!artist) {
+                throw new NotFoundError(`Artist with id ${artistId} not found`);
+            }
+
+            // Validate that the album exists if specified
+            if (req.body.hasAlbum === 'true' && albumId) {
+                const album = await tx.album.findUnique({
+                    where: { id: albumId }
+                });
+                if (!album) {
+                    throw new NotFoundError(`Album with id ${albumId} not found`);
                 }
             }
+
+            // Create file
+            const newFile = await tx.file.create({
+                data: {
+                    filename: path.basename(filePath),
+                    path: filePath,
+                    mimeType: req.file!.mimetype,
+                    size: req.file!.size,
+                    uploadedAt: new Date()
+                }
+            });
+
+            // Create track
+            const newTrack = await tx.track.create({
+                data: {
+                    title: req.body.title,
+                    duration: req.body.duration ? Number(req.body.duration) : null,
+                    fileId: newFile.id
+                }
+            });
+
+            // Create artist-track relationship
+            await tx.artistTrack.create({
+                data: {
+                    trackId: newTrack.id,
+                    artistId: artistId
+                }
+            });
+
+            // Create track-album relationship if needed
+            if (req.body.hasAlbum === 'true' && albumId) {
+                // Get the highest position for this album
+                const lastTrackInAlbum = await tx.trackAlbum.findFirst({
+                    where: { albumId: albumId },
+                    orderBy: { position: 'desc' },
+                    select: { position: true }
+                });
+
+                const nextPosition = (lastTrackInAlbum?.position ?? 0) + 1;
+
+                await tx.trackAlbum.create({
+                    data: {
+                        trackId: newTrack.id,
+                        albumId: albumId,
+                        position: nextPosition
+                    }
+                });
+            }
+
+            // Return the complete track with relations
+            return await tx.track.findUniqueOrThrow({
+                where: { id: newTrack.id },
+                include: {
+                    file: true,
+                    artists: {
+                        include: {
+                            artist: true
+                        }
+                    },
+                    albums: {
+                        include: {
+                            album: true
+                        }
+                    }
+                }
+            });
         });
 
         res.status(201).json({ track: createdTrack });
     } catch (err: unknown) {
-        // Clean up uploaded file if database operation fails
-        if (req.file && req.file.path) {
+        // Clean up uploaded file if any operation fails
+        if (req.file?.path) {
             try {
                 await fs.unlink(req.file.path);
             } catch (unlinkError) {
                 console.error('Failed to clean up uploaded file:', unlinkError);
             }
         }
-        
+
+        if (err instanceof BadRequestError) {
+            return res.status(err.status!).json({ error: err.message });
+        }
+        if (err instanceof NotFoundError) {
+            return res.status(err.status!).json({ error: err.message });
+        }
+        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2003') {
+            const notFoundError = new NotFoundError('Artist or Album not found');
+            return res.status(notFoundError.status!).json({ error: notFoundError.message });
+        }
+
+        const internalError = new InternalServerError('Failed to create track');
         console.error('Error creating track:', err);
-        res.status(500).json({ 
-            error: "Failed to create track",
-            details: err instanceof Error ? err.message : "Unknown error"
-        });
+        res.status(internalError.status!).json({ error: internalError.message });
     }
 }
 
 // Connect a single track to an album
 export async function connect_one(req: Request, res: Response) {
     try {
-        const trackId = Number(req.params.track_id);
+
+        const trackId = req.params.track_id;
         const albumId = req.body.album_id;
 
-        // Check if relationship already exists
-        const existingRelation = await prisma.trackAlbum.findUnique({
-            where: {
-                trackId_albumId: {
-                    trackId: trackId,
-                    albumId: albumId
+        // Use transaction to ensure atomicity
+        const trackAlbum = await prisma.$transaction(async (tx) => {
+            // Get the highest position for this album
+            const lastTrack = await tx.trackAlbum.findFirst({
+                where: { albumId: albumId },
+                orderBy: { position: 'desc' },
+                select: { position: true }
+            });
+
+            const nextPosition = (lastTrack?.position ?? 0) + 1;
+
+            // Create the relationship
+            return await tx.trackAlbum.create({
+                data: {
+                    trackId: Number(trackId),
+                    albumId: albumId,
+                    position: nextPosition
                 }
-            }
-        });
-
-        if (existingRelation) {
-            return res.status(409).json({ error: "Track is already connected to this album" });
-        }
-
-        // Fetch the number of trackl to calculate the position
-        const album = await prisma.album.findUnique({
-            where: { id: albumId },
-            select: { trackNumber: true }
-        });
-        const position = album?.trackNumber ?? 0; // fallback to 0 if not found
-
-        // Create the relationship (foreign key constraints will handle existence validation)
-        await prisma.trackAlbum.create({
-            data: {
-                trackId: trackId,
-                albumId: albumId,
-                position: position + 1
-            }
+            });
         });
 
         res.status(201).json({
             message: "Track added to album successfully",
             trackId: trackId,
-            albumId: albumId
+            albumId: albumId,
+            position: trackAlbum.position
         });
 
     } catch (err: unknown) {
-        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2003') {
-            throw new NotFoundError('Track or Album not found');
+        if (err instanceof NotFoundError) {
+            return res.status(err.status!).json({ error: err.message });
         }
-        throw err;
+        if (err instanceof ConflictError) {
+            return res.status(err.status!).json({ error: err.message });
+        }
+        if (err instanceof PrismaClientKnownRequestError) {
+            if (err.code === 'P2003') {
+                // Foreign key constraint failed
+                const notFoundError = new NotFoundError('Track or Album not found');
+                return res.status(notFoundError.status!).json({ error: notFoundError.message });
+            }
+            if (err.code === 'P2002') {
+                // Unique constraint failed
+                const conflictError = new ConflictError('Track is already connected to this album');
+                return res.status(conflictError.status!).json({ error: conflictError.message });
+            }
+        }
+
+        const internalError = new InternalServerError('Failed to connect track to album');
+        console.error('Error connecting track to album:', err);
+        res.status(internalError.status!).json({ error: internalError.message });
     }
 }
 
 // Delete a single track
 export async function delete_one(req: Request, res: Response) {
     try {
-        await prisma.track.delete({
-            where: { id: Number(req.params.track_id) }
-        })
+        const trackId = Number(req.params.track_id);
+
+        // Get track with file info, then delete in transaction
+        const deletedTrack = await prisma.$transaction(async (tx) => {
+            const track = await tx.track.findUnique({
+                where: { id: trackId },
+                include: { file: true }
+            });
+
+            if (!track) {
+                throw new NotFoundError('Track not found');
+            }
+
+            // Delete the track (cascade handles relationships)
+            await tx.track.delete({
+                where: { id: trackId }
+            });
+
+            // Delete the File record if it exists
+            if (track.file) {
+                await tx.file.delete({
+                    where: { id: track.file.id }
+                });
+            }
+
+            return track;
+        });
+
+        // After successful database deletion, delete physical file
+        if (deletedTrack.file) {
+            try {
+                await fs.unlink(deletedTrack.file.path);
+            } catch (unlinkError) {
+                console.error('Failed to delete file from disk:', unlinkError);
+            }
+        }
+
         res.status(204).send();
     } catch (err: unknown) {
-        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
-            throw new NotFoundError('Track not found');
+        if (err instanceof NotFoundError) {
+            return res.status(err.status!).json({ error: err.message });
         }
-        throw err;
+        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+            const notFoundError = new NotFoundError('Track not found');
+            return res.status(notFoundError.status!).json({ error: notFoundError.message });
+        }
+
+        const internalError = new InternalServerError('Failed to delete track');
+        console.error('Error deleting track:', err);
+        res.status(internalError.status!).json({ error: internalError.message });
     }
 }
 
@@ -270,14 +361,12 @@ export async function stream_one(req: Request, res: Response): Promise<void> {
 
         // Check if track exists
         if (!track) {
-            res.status(404).json({ error: 'Track not found' });
-            return;
+            throw new NotFoundError('Track not found');
         }
 
         // Check if track.fileId is valid
         if (track.fileId === null) {
-            res.status(404).json({ error: 'Track file not associated with a file' });
-            return;
+            throw new NotFoundError('Track file not associated with a file');
         }
 
         // Fetch the file relation for the track
@@ -286,29 +375,25 @@ export async function stream_one(req: Request, res: Response): Promise<void> {
         });
 
         if (!file || !file.path) {
-            res.status(404).json({ error: 'Track file not found' });
-            return;
+            throw new NotFoundError('Track file not found');
         }
         const trackFilePath = file.path;
 
         // Check if file path exists in track record
         if (!trackFilePath) {
-            res.status(500).json({ error: 'Track file path not found' });
-            return;
+            throw new InternalServerError('Track file path not found');
         }
 
         // Security check: validate file path is within allowed directory
         if (!validateFilePath(trackFilePath)) {
-            res.status(403).json({ error: 'Access denied' });
-            return;
+            throw new ForbiddenError('Access denied');
         }
 
         // Check if file exists on filesystem
         try {
             await fs.access(trackFilePath);
         } catch {
-            res.status(404).json({ error: 'Audio file not found on server' });
-            return;
+            throw new NotFoundError('Audio file not found on server');
         }
 
         // Get file stats
@@ -329,8 +414,7 @@ export async function stream_one(req: Request, res: Response): Promise<void> {
 
             if ((isNaN(startNum) && partialStart && partialStart.length > 1) ||
                 (isNaN(endNum) && partialEnd && partialEnd.length > 1)) {
-                res.status(400).json({ error: 'Invalid range header' });
-                return;
+                throw new BadRequestError('Invalid range header');
             }
 
             // Calculate start and end positions
@@ -394,12 +478,27 @@ export async function stream_one(req: Request, res: Response): Promise<void> {
         readStream.pipe(res);
 
     } catch (error) {
+        if (error instanceof NotFoundError) {
+            res.status(error.status!).json({ error: error.message });
+            return;
+        }
+        if (error instanceof ForbiddenError) {
+            res.status(error.status!).json({ error: error.message });
+            return;
+        }
+        if (error instanceof BadRequestError) {
+            res.status(error.status!).json({ error: error.message });
+            return;
+        }
+        if (error instanceof InternalServerError) {
+            res.status(error.status!).json({ error: error.message });
+            return;
+        }
+        
         console.error('Error in stream_one:', error);
         if (!res.headersSent) {
-            res.status(500).json({
-                error: 'Internal server error',
-                details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
-            });
+            const internalError = new InternalServerError('Internal server error');
+            res.status(internalError.status!).json({ error: internalError.message });
         }
     }
 }

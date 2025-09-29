@@ -9,13 +9,11 @@ import * as track from './requestHandlers/track.js';
 import * as artist from './requestHandlers/artist.js';
 import * as album from './requestHandlers/album.js';
 
-// Import validation middleware
-import { createValidateParams, createValidateBody, createValidateQuery } from './middleware/middleware.js';
-
 // Import validation schemas
-import { transformFormData, TrackParams, TrackCreateBody, TrackConnectBody, TrackQuery } from './validation/track.js';
-import { ArtistParams, ArtistCreateBody, ArtistQuery } from './validation/artist.js';
-import { AlbumParams, AlbumCreateBody, AlbumQuery } from './validation/album.js';
+import { createValidateBody, createValidateParams, createValidateQuery } from "./middleware/middleware.js";
+import { TrackCreationData, TrackGetAllQuery, TrackParams, TrackUpdateData } from "./validation/track.js";
+import { ArtistCreationData, ArtistGetAllQuery, ArtistParams } from "./validation/artist.js";
+import { AlbumCreationData, AlbumGetAllQuery, AlbumParams,  } from "./validation/album.js";
 
 const app = express();
 const port = config.port;
@@ -50,53 +48,48 @@ app.get("/", (req: Request, res: Response) => {
 // TRACKS ROUTES
 // ========================================
 
+// routes
 app.route("/tracks")
-	.get(createValidateQuery(TrackQuery), track.get_all)
-	.post(multer.single("file"), transformFormData, createValidateBody(TrackCreateBody), track.create_one);
+    .get(createValidateQuery(TrackGetAllQuery), track.get_all)
+    .post(multer.single("file"), createValidateBody(TrackCreationData), track.create_one);
 
 app.route("/tracks/:track_id")
-	.all(createValidateParams(TrackParams))
-	.get(track.get_one)
-	.delete(track.delete_one)
-	.patch(createValidateBody(TrackConnectBody), track.connect_one);
+    .get(createValidateParams(TrackParams), track.get_one)
+    .patch(createValidateParams(TrackParams), createValidateBody(TrackUpdateData), track.connect_one)
+    .delete(createValidateParams(TrackParams), track.delete_one);
 
 app.route("/tracks/:track_id/stream")
-	.all(createValidateParams(TrackParams))
-	.get(track.stream_one)
+    .get(createValidateParams(TrackParams), track.stream_one);
 
 // ========================================
 // ARTISTS ROUTES
 // ========================================
 
 app.route("/artists")
-	.get(createValidateQuery(ArtistQuery), artist.get_all)
-	.post(createValidateBody(ArtistCreateBody), artist.create_one);
+	.get(createValidateQuery(ArtistGetAllQuery), artist.get_all)
+	.post(createValidateBody(ArtistCreationData), artist.create_one);
 
 app.route("/artists/:artist_id")
-	.all(createValidateParams(ArtistParams))
-	.get(artist.get_one)
-	.delete(artist.delete_one);
+	.get(createValidateParams(ArtistParams), artist.get_one)
+	.delete(createValidateParams(ArtistParams), artist.delete_one);
 
 app.route("/artists/:artist_id/tracks")
-	.all(createValidateParams(ArtistParams))
-	.get(artist.get_tracks);
+	.get(createValidateParams(ArtistParams), artist.get_tracks);
 
 app.route("/artists/:artist_id/albums")
-	.all(createValidateParams(ArtistParams))
-	.get(artist.get_albums);
+	.get(createValidateParams(ArtistParams), artist.get_albums);
 
 // ========================================
 // ALBUMS ROUTES
 // ========================================
 
 app.route("/albums")
-	.get(createValidateQuery(AlbumQuery), album.get_all)
-	.post(createValidateBody(AlbumCreateBody), album.create_one);
+	.get(createValidateQuery(AlbumGetAllQuery), album.get_all)
+	.post(createValidateBody(AlbumCreationData), album.create_one);
 
 app.route("/albums/:album_id")
-	.all(createValidateParams(AlbumParams))
-	.get(album.get_one)
-	.delete(album.delete_one);
+	.get(createValidateParams(AlbumParams), album.get_one)
+	.delete(createValidateParams(AlbumParams), album.delete_one);
 
 // ========================================
 // ERROR HANDLING MIDDLEWARE

@@ -13,3 +13,39 @@ export class NotFoundError extends HttpError {
     }
 }
 
+export class ValidationError extends HttpError {
+    constructor(message: string) {
+        super(message, 400);
+    }
+}
+
+export class DatabaseError extends HttpError {
+    constructor(message: string) {
+        super(message, 500);
+    }
+}
+
+export class BadRequestError extends HttpError {
+    constructor(message: string) {
+        super(message, 400);
+    }
+}
+
+export class ConflictError extends HttpError {
+    constructor(message: string) {
+        super(message, 409);
+    }
+}
+
+export class ForbiddenError extends HttpError {
+    constructor(message: string) {
+        super(message, 403);
+    }
+}
+
+export class InternalServerError extends HttpError {
+    constructor(message: string) {
+        super(message, 500);
+    }
+}
+

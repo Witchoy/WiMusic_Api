@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
-import { assert } from "superstruct";
+import { assert, Struct } from "superstruct";
 
-export const createValidateParams = (schema: any) => {
+export function createValidateParams<T>(schema: Struct<T, any>) {
     return (req: Request, res: Response, next: NextFunction) => {
         try {
             assert(req.params, schema);
@@ -15,7 +15,7 @@ export const createValidateParams = (schema: any) => {
     };
 };
 
-export const createValidateBody = (schema: any) => {
+export function createValidateBody<T>(schema: Struct<T, any>) {
     return (req: Request, res: Response, next: NextFunction) => {
         try {
             assert(req.body, schema);
@@ -29,16 +29,14 @@ export const createValidateBody = (schema: any) => {
     };
 };
 
-export const createValidateQuery = (schema: any) => {
+// Make the function more generic to accept specific struct types
+export function createValidateQuery<T>(schema: Struct<T, any>) {
     return (req: Request, res: Response, next: NextFunction) => {
         try {
             assert(req.query, schema);
             next();
         } catch (error) {
-            res.status(400).json({
-                error: 'Invalid query parameters',
-                details: error instanceof Error ? error.message : 'Validation failed'
-            });
+            res.status(400).json({ error: 'Invalid query parameters' });
         }
     };
-};
+}

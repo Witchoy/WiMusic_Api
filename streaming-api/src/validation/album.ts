@@ -1,4 +1,4 @@
-import { object, optional, refine, string, number } from "superstruct";
+import { object, optional, string, number, refine } from "superstruct";
 import validator from "validator";
 
 const { isInt } = validator;
@@ -7,14 +7,19 @@ export const AlbumParams = object({
     album_id: refine(string(), 'int', (value) => isInt(value))
 });
 
-export const AlbumCreateBody = object({
+export const AlbumCreationData = object({
     title: string(),
     artist_id: number(),
     releaseDate: optional(number()),
     trackNumber: optional(number())
 });
 
-export const AlbumQuery = object({
+export const AlbumGetAllQuery = object({
     skip: optional(number()),
-    take: optional(number())
+    take: optional(number()),
+    title: optional(string())
+});
+
+export const AlbumGetOneQuery = object({
+    title: optional(string())
 });

@@ -1,34 +1,27 @@
-import type { Request, Response, NextFunction } from "express";
-import { object, optional, refine, string, number, boolean } from "superstruct";
+import { object, optional, string, number, coerce, boolean, refine } from "superstruct";
 import validator from "validator";
 
 const { isInt } = validator;
-
-export const transformFormData = (req: Request, res: Response, next: NextFunction) => {
-    if (req.body.artist_id) req.body.artist_id = parseInt(req.body.artist_id);
-    if (req.body.album_id) req.body.album_id = parseInt(req.body.album_id);
-    if (req.body.hasAlbum) req.body.hasAlbum = req.body.hasAlbum === 'true';
-    next();
-};
 
 export const TrackParams = object({
     track_id: refine(string(), 'int', (value) => isInt(value))
 });
 
-export const TrackCreateBody = object({
+// For multipart/form-data (strings from multer)
+export const TrackCreationData = object({
     title: string(),
-    artist_id: refine(number(), 'positive', (value) => value > 0),
-    duration: optional(refine(number(), 'positive', (value) => value > 0)),
-    hasAlbum: optional(boolean()),
-    album_id: optional(refine(number(), 'positive', (value) => value > 0))
-
+    artist_id: refine(string(), 'int', (value) => isInt(value)),
+    duration: optional(refine(string(), 'int', (value) => isInt(value))),
+    hasAlbum: optional(refine(string(), 'boolean', (val) => val === 'true' || val === 'false')),
+    album_id: optional(refine(string(), 'int', (value) => isInt(value)))
 });
 
-export const TrackConnectBody = object({
-    album_id: refine(number(), 'positive', (value) => value > 0)
+export const TrackUpdateData = object({
+    album_id: refine(string(), 'int', (value) => isInt(value))
 });
 
-export const TrackQuery = object({
-    skip: optional(number()),
-    take: optional(number())
+export const TrackGetAllQuery = object({
+    skip: optional(refine(string(), 'int', (value) => isInt(value))),
+    take: optional(refine(string(), 'int', (value) => isInt(value))),
+    title: optional(string())
 });
