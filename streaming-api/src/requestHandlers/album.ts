@@ -2,14 +2,12 @@ import type { Request, Response } from "express";
 import { NotFoundError, BadRequestError, InternalServerError } from "../utils/error.js";
 import { prisma } from "../utils/db.js";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { assert, StructError } from "superstruct";
+import { StructError } from "superstruct";
 import type { Prisma } from "@prisma/client";
-import { AlbumCreationData, AlbumGetAllQuery, AlbumGetOneQuery } from "../validation/album.js";
 
 // Handler to get all albums, with optional pagination
 export async function get_all(req: Request, res: Response) {
     try {
-        assert(req.query, AlbumGetAllQuery);
         const filter: Prisma.AlbumWhereInput = {};
         const { title, skip, take } = req.query;
 
@@ -47,7 +45,6 @@ export async function get_all(req: Request, res: Response) {
 // Handler to get a single album by ID
 export async function get_one(req: Request, res: Response) {
     try {
-        assert(req.query, AlbumGetOneQuery);
         const album = await prisma.album.findUnique({
             where: { id: Number(req.params.album_id) },
             include: {
@@ -85,8 +82,6 @@ export async function get_one(req: Request, res: Response) {
 // Create a single album
 export async function create_one(req: Request, res: Response) {
     try {
-        assert(req.body, AlbumCreationData);
-
         const artistId = Number(req.body.artist_id);
         
         if (isNaN(artistId) || artistId <= 0) {
@@ -149,7 +144,7 @@ export async function create_one(req: Request, res: Response) {
             return res.status(badRequestError.status!).json({ error: badRequestError.message });
         }
         if (err instanceof PrismaClientKnownRequestError && err.code === 'P2003') {
-            const notFoundError = new NotFoundError('Artist not found');
+            const notFoundError = new NotFoundError('Album not found');
             return res.status(notFoundError.status!).json({ error: notFoundError.message });
         }
 

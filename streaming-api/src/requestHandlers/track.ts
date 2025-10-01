@@ -6,7 +6,7 @@ import { NotFoundError, ValidationError, ConflictError, ForbiddenError, Internal
 import { prisma } from "../utils/db.js";
 import { config } from '../utils/config.js';
 import path from 'path';
-import { assert, StructError } from "superstruct";
+import { StructError } from "superstruct";
 
 const MEDIA_ROOT = path.resolve(config.mediaRoot);
 
@@ -83,7 +83,7 @@ export async function get_one(req: Request, res: Response) {
             albums: track.albums.map(a => a.album)
         };
 
-        res.status(200).json({ tracks: formattedTrack });
+        res.status(200).json({ track: formattedTrack });
     } catch (err: unknown) {
         if (err instanceof NotFoundError) {
             return res.status(err.status!).json({ error: err.message });
