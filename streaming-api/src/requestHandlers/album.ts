@@ -9,27 +9,40 @@ import type { Prisma } from "@prisma/client";
 export async function get_all(req: Request, res: Response) {
     try {
         const filter: Prisma.AlbumWhereInput = {};
-        const { title, skip, take } = req.query;
+        const { title, page = '1', pageSize = '10' } = req.query;
 
         // Filter by title if specified in the query
         if(title) {
             filter.title = { contains: String(title) };
         }
 
-        const albums = await prisma.album.findMany({
-            // skip: skip ? Number(skip) : undefined,
-            // take: skip ? Number(skip) : undefined,
-            where: filter,
-            orderBy: { title: 'asc' }
-        });
+        // Parse pagination parameters
+        const pageNum = parseInt(page as string) || 1;
+        const pageSizeNum = parseInt(pageSize as string) || 10;
+        const skip = (pageNum - 1) * pageSizeNum;
 
-        // Get total count of albums for pagination
-        const albumCount = await prisma.album.count({
-            where: filter
+        const [albums, totalCount] = await Promise.all([
+            prisma.album.findMany({
+                skip,
+                take: pageSizeNum,
+                where: filter,
+                orderBy: { title: 'asc' }
+            }),
+            prisma.album.count({
+                where: filter
+            })
+        ]);
+
+        // Return structured pagination response
+        res.status(200).json({
+            data: albums,
+            pagination: {
+                page: pageNum,
+                pageSize: pageSizeNum,
+                totalCount,
+                totalPages: Math.ceil(totalCount / pageSizeNum)
+            }
         });
-        res.set('X-Total-Count', albumCount.toString());
-        // Respond with albums
-        res.status(200).json({ albums });
     } catch (err: unknown) {
         if (err instanceof StructError) {
             const badRequestError = new BadRequestError('Invalid query parameters');
@@ -37,8 +50,7 @@ export async function get_all(req: Request, res: Response) {
         }
         
         const internalError = new InternalServerError('Failed to fetch albums');
-        console.error('Error fetching albums:', err);
-        res.status(internalError.status!).json({ error: internalError.message });
+        return res.status(internalError.status!).json({ error: internalError.message });
     }
 }
 
@@ -63,7 +75,7 @@ export async function get_one(req: Request, res: Response) {
             tracks: album.tracks.map(t => t.track)
         };
 
-        res.status(200).json({ album: formattedAlbum });
+        res.status(200).json(formattedAlbum);
     } catch (err: unknown) {
         if (err instanceof NotFoundError) {
             return res.status(err.status!).json({ error: err.message });
@@ -74,8 +86,7 @@ export async function get_one(req: Request, res: Response) {
         }
         
         const internalError = new InternalServerError('Failed to fetch album');
-        console.error('Error fetching album:', err);
-        res.status(internalError.status!).json({ error: internalError.message });
+        return res.status(internalError.status!).json({ error: internalError.message });
     }
 }
 
@@ -134,7 +145,7 @@ export async function create_one(req: Request, res: Response) {
             });
         });
 
-        res.status(201).json({ album: newAlbum });
+        res.status(201).json(newAlbum);
     } catch (err: unknown) {
         if (err instanceof BadRequestError) {
             return res.status(err.status!).json({ error: err.message });
@@ -149,8 +160,7 @@ export async function create_one(req: Request, res: Response) {
         }
 
         const internalError = new InternalServerError('Failed to create album');
-        console.error('Error creating album:', err);
-        res.status(internalError.status!).json({ error: internalError.message });
+        return res.status(internalError.status!).json({ error: internalError.message });
     }
 }
 
@@ -168,7 +178,7 @@ export async function delete_one(req: Request, res: Response) {
             where: { id: albumId }
         });
         
-        res.status(204).send();
+        res.status(204).json({ message: 'Album deleted successfully' });
     } catch (err: unknown) {
         if (err instanceof BadRequestError) {
             return res.status(err.status!).json({ error: err.message });
@@ -179,7 +189,6 @@ export async function delete_one(req: Request, res: Response) {
         }
         
         const internalError = new InternalServerError('Failed to delete album');
-        console.error('Error deleting album:', err);
-        res.status(internalError.status!).json({ error: internalError.message });
+        return res.status(internalError.status!).json({ error: internalError.message });
     }
 }

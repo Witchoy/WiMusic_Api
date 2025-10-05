@@ -21,10 +21,6 @@ export const ArtistGetAllQuery = object({
     name: optional(string())
 });
 
-export const ArtistGetOneQuery = object({
-    name: optional(string())
-});
-
 export const ArtistGetTrackQuery = object({
     skip: optional(refine(string(), 'int', (value) => isInt(value))),
     take: optional(refine(string(), 'int', (value) => isInt(value)))

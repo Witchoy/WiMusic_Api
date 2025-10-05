@@ -2,14 +2,12 @@ import type { Request, Response } from "express";
 import { NotFoundError, BadRequestError, ConflictError, InternalServerError } from "../utils/error.js";
 import { prisma } from "../utils/db.js";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { assert, StructError } from "superstruct";
 import type { Prisma } from "@prisma/client";
-import { ArtistCreationData, ArtistGetAlbumQuery, ArtistGetAllQuery, ArtistGetOneQuery, ArtistGetTrackQuery } from "../validation/artist.js";
+import { StructError } from "superstruct";
 
 // Get all artists with optional pagination
 export async function get_all(req: Request, res: Response) {
     try {
-        assert(req.query, ArtistGetAllQuery);
         const filter: Prisma.ArtistWhereInput = {};
         const { name, skip, take } = req.query;
 
@@ -48,7 +46,6 @@ export async function get_all(req: Request, res: Response) {
 // Get a single artist by ID
 export async function get_one(req: Request, res: Response) {
     try {
-        assert(req.query, ArtistGetOneQuery);
         const artist = await prisma.artist.findUnique({
             where: { id: Number(req.params.artist_id) },
             include: {
@@ -84,7 +81,6 @@ export async function get_one(req: Request, res: Response) {
 // Get all tracks for a specific artist with optional pagination
 export async function get_tracks(req: Request, res: Response) {
     try {
-        assert(req.query, ArtistGetTrackQuery);
         const { skip, take } = req.query;
 
         const tracks = await prisma.track.findMany({
@@ -117,7 +113,6 @@ export async function get_tracks(req: Request, res: Response) {
 // Get all albums for a specific artist with optional pagination
 export async function get_albums(req: Request, res: Response) {
     try {
-        assert(req.query, ArtistGetAlbumQuery)
         const {skip, take} = req.query;
         // Fetch albums linked to artist
         const albums = await prisma.album.findMany({
@@ -156,8 +151,6 @@ export async function get_albums(req: Request, res: Response) {
 // Create a single artist
 export async function create_one(req: Request, res: Response) {
     try {
-        assert(req.body, ArtistCreationData);
-
         // Prepare artist data with optional fields
         const artistData: {
             name: string;

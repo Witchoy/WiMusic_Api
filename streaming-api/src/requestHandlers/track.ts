@@ -6,7 +6,6 @@ import { NotFoundError, ValidationError, ConflictError, ForbiddenError, Internal
 import { prisma } from "../utils/db.js";
 import { config } from '../utils/config.js';
 import path from 'path';
-import { StructError } from "superstruct";
 
 const MEDIA_ROOT = path.resolve(config.mediaRoot);
 
@@ -52,11 +51,6 @@ export async function get_all(req: Request, res: Response) {
 
         res.status(200).json({ tracks: formattedTracks });
     } catch (err: unknown) {
-        if (err instanceof StructError) {
-            const badRequestError = new BadRequestError('Invalid query parameters');
-            return res.status(badRequestError.status!).json({ error: badRequestError.message });
-        }
-        
         const internalError = new InternalServerError('Failed to fetch tracks');
         console.error('Error fetching tracks:', err);
         res.status(internalError.status!).json({ error: internalError.message });

@@ -3,17 +3,22 @@ import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "./utils/error.js";
 import { config } from './utils/config.js';
 import { configurationStorage } from "./middleware/upload.js";
+import helmet from 'helmet';
 
 // Import request handlers
 import * as track from './requestHandlers/track.js';
 import * as artist from './requestHandlers/artist.js';
 import * as album from './requestHandlers/album.js';
+import * as genre from './requestHandlers/genre.js';
+import * as playlist from './requestHandlers/playlist.js';
 
 // Import validation schemas
 import { createValidateBody, createValidateParams, createValidateQuery } from "./middleware/middleware.js";
 import { TrackCreationData, TrackGetAllQuery, TrackParams, TrackUpdateData } from "./validation/track.js";
 import { ArtistCreationData, ArtistGetAllQuery, ArtistParams } from "./validation/artist.js";
-import { AlbumCreationData, AlbumGetAllQuery, AlbumParams,  } from "./validation/album.js";
+import { AlbumCreationData, AlbumGetAllQuery, AlbumParams } from "./validation/album.js";
+import { GenreCreationData, GenreGetAllQuery, GenreParams } from "./validation/genre.js";
+import { PlaylistCreationData, PlaylistGetAllQuery, PlaylistParams } from "./validation/playlist.js";
 
 const app = express();
 const port = config.port;
@@ -28,6 +33,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 	next();
 });
 app.use(express.json());
+app.use(helmet());
 
 // ========================================
 // ROUTES DEFINITION
@@ -90,6 +96,28 @@ app.route("/albums")
 app.route("/albums/:album_id")
 	.get(createValidateParams(AlbumParams), album.get_one)
 	.delete(createValidateParams(AlbumParams), album.delete_one);
+
+// ========================================
+// GENRES ROUTES
+// ========================================
+app.route("/genres")
+	.get(createValidateQuery(GenreGetAllQuery), genre.get_all)
+	.post(createValidateBody(GenreCreationData), genre.create_one);
+
+app.route("/genres/:genre_id")
+	.get(createValidateParams(GenreParams), genre.get_one)
+	.delete(createValidateParams(GenreParams), genre.delete_one);
+
+// ========================================
+// PLAYLISTS ROUTES
+// ========================================
+app.route("/playlists")
+	.get(createValidateQuery(PlaylistGetAllQuery), playlist.get_all)
+	.post(createValidateBody(PlaylistCreationData), playlist.create_one);
+
+app.route("/playlists/:playlist_id")
+	.get(createValidateParams(PlaylistParams), playlist.get_one)
+	.delete(createValidateParams(PlaylistParams), playlist.delete_one);
 
 // ========================================
 // ERROR HANDLING MIDDLEWARE

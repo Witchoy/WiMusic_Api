@@ -19,7 +19,3 @@ export const AlbumGetAllQuery = object({
     take: optional(number()),
     title: optional(string())
 });
-
-export const AlbumGetOneQuery = object({
-    title: optional(string())
-});
