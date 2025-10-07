@@ -93,54 +93,56 @@ export async function get_one(req: Request, res: Response) {
 // Create a single album
 export async function create_one(req: Request, res: Response) {
     try {
-        const artistId = Number(req.body.artist_id);
+        const { title, artist_id, genre_id, releaseDate, trackNumber } = req.body;
         
+        // Validate required fields
+        const artistId = Number(artist_id);
         if (isNaN(artistId) || artistId <= 0) {
             throw new BadRequestError("Invalid artist_id");
         }
 
-        // Use transaction to ensure atomicity
+        // Parse optional genre IDs
+        let genreIds: number[] = [];
+        if (genre_id) {
+            genreIds = Array.isArray(genre_id) ? genre_id.map(Number) : [Number(genre_id)];
+            if (genreIds.some(id => isNaN(id) || id <= 0)) {
+                throw new BadRequestError("Invalid genre_id");
+            }
+        }
+
+        // Create album with relationships in transaction
         const newAlbum = await prisma.$transaction(async (tx) => {
-            // Prepare album data with optional fields
-            const albumData: {
-                title: string;
-                releaseDate?: number;
-                trackNumber?: number;
-            } = {
-                title: req.body.title
-            };
-
-            // Add optional fields if provided
-            if (req.body.releaseDate !== undefined) {
-                albumData.releaseDate = Number(req.body.releaseDate);
-            }
-
-            if (req.body.trackNumber !== undefined) {
-                albumData.trackNumber = Number(req.body.trackNumber);
-            }
+            // Prepare album data
+            const albumData: any = { title };
+            if (releaseDate) albumData.releaseDate = Number(releaseDate);
+            if (trackNumber) albumData.trackNumber = Number(trackNumber);
 
             // Create the album
             const album = await tx.album.create({
                 data: albumData
             });
 
-            // Create the artist-album relationship
+            // Add artist relationship
             await tx.artistAlbum.create({
-                data: {
-                    albumId: album.id,
-                    artistId: artistId
-                }
+                data: { albumId: album.id, artistId }
             });
 
-            // Return album with artist relationship
-            return await tx.album.findUniqueOrThrow({
+            // Add genre relationships if provided
+            if (genreIds.length > 0) {
+                await Promise.all(
+                    genreIds.map(genreId => 
+                        tx.albumGenre.create({
+                            data: { albumId: album.id, genreId }
+                        })
+                    )
+                );
+            }
+
+            // Return complete album data
+            return tx.album.findUnique({
                 where: { id: album.id },
                 include: {
-                    artists: {
-                        include: {
-                            artist: true
-                        }
-                    }
+                    artists: { include: { artist: true } }
                 }
             });
         });

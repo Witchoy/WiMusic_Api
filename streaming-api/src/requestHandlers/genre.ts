@@ -102,6 +102,11 @@ export async function create_one(req: Request, res: Response) {
             const badRequestError = new BadRequestError('Invalid request body');
             return res.status(badRequestError.status!).json({ error: badRequestError.message });
         }
+        // Handle unique constraint violation (duplicate genre name)
+        if (err instanceof PrismaClientKnownRequestError && err.code === 'P2002') {
+            const conflictError = new ConflictError('Genre with this name already exists');
+            return res.status(conflictError.status!).json({ error: conflictError.message });
+        }
         // Handle foreign key constraint (parent genre not found)
         if (err instanceof PrismaClientKnownRequestError && err.code === 'P2003') {
             const notFoundError = new NotFoundError('Parent genre not found');

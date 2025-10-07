@@ -1,4 +1,4 @@
-import { object, optional, string, number, coerce, boolean, refine } from "superstruct";
+import { object, optional, string, number, coerce, boolean, refine, union, array } from "superstruct";
 import validator from "validator";
 
 const { isInt } = validator;
@@ -13,7 +13,11 @@ export const TrackCreationData = object({
     artist_id: refine(string(), 'int', (value) => isInt(value)),
     duration: optional(refine(string(), 'int', (value) => isInt(value))),
     hasAlbum: optional(refine(string(), 'boolean', (val) => val === 'true' || val === 'false')),
-    album_id: optional(refine(string(), 'int', (value) => isInt(value)))
+    album_id: optional(refine(string(), 'int', (value) => isInt(value))),
+    genre_id: optional(union([
+        refine(string(), 'int', (value) => isInt(value)),
+        array(refine(string(), 'int', (value) => isInt(value)))
+    ]))
 });
 
 export const TrackUpdateData = object({

@@ -92,48 +92,54 @@ export async function get_one(req: Request, res: Response) {
 // Create a single track and connect it to the artist and album
 export async function create_one(req: Request, res: Response) {
     try {
-
         if (!req.file) {
             throw new BadRequestError("MP3 file is required");
         }
 
+        const { title, artist_id, album_id, genre_id, duration, hasAlbum } = req.body;
         const filePath = req.file.path;
 
-        // Validate and parse IDs
-        const artistId = Number(req.body.artist_id);
-        if (isNaN(artistId)) {
+        // Validate required fields
+        const artistId = Number(artist_id);
+        if (isNaN(artistId) || artistId <= 0) {
             throw new BadRequestError("Invalid artist_id");
         }
 
+        // Parse optional album ID
         let albumId: number | undefined;
-        if (req.body.hasAlbum === 'true') {
-            albumId = Number(req.body.album_id);
-            if (isNaN(albumId)) {
+        if (hasAlbum === 'true' && album_id) {
+            albumId = Number(album_id);
+            if (isNaN(albumId) || albumId <= 0) {
                 throw new BadRequestError("Invalid album_id");
             }
         }
 
-        // Wrap everything in a transaction
+        // Parse optional genre IDs
+        let genreIds: number[] = [];
+        if (genre_id) {
+            genreIds = Array.isArray(genre_id) ? genre_id.map(Number) : [Number(genre_id)];
+            if (genreIds.some(id => isNaN(id) || id <= 0)) {
+                throw new BadRequestError("Invalid genre_id");
+            }
+        }
+
+        // Create track with all relationships in transaction
         const createdTrack = await prisma.$transaction(async (tx) => {
-            // Validate that the artist exists
-            const artist = await tx.artist.findUnique({
-                where: { id: artistId }
-            });
+            // Validate artist exists
+            const artist = await tx.artist.findUnique({ where: { id: artistId } });
             if (!artist) {
                 throw new NotFoundError(`Artist with id ${artistId} not found`);
             }
 
-            // Validate that the album exists if specified
-            if (req.body.hasAlbum === 'true' && albumId) {
-                const album = await tx.album.findUnique({
-                    where: { id: albumId }
-                });
+            // Validate album exists if specified
+            if (albumId) {
+                const album = await tx.album.findUnique({ where: { id: albumId } });
                 if (!album) {
                     throw new NotFoundError(`Album with id ${albumId} not found`);
                 }
             }
 
-            // Create file
+            // Create file record
             const newFile = await tx.file.create({
                 data: {
                     filename: path.basename(filePath),
@@ -147,55 +153,49 @@ export async function create_one(req: Request, res: Response) {
             // Create track
             const newTrack = await tx.track.create({
                 data: {
-                    title: req.body.title,
-                    duration: req.body.duration ? Number(req.body.duration) : null,
+                    title,
+                    duration: duration ? Number(duration) : null,
                     fileId: newFile.id
                 }
             });
 
-            // Create artist-track relationship
+            // Add artist relationship
             await tx.artistTrack.create({
-                data: {
-                    trackId: newTrack.id,
-                    artistId: artistId
-                }
+                data: { trackId: newTrack.id, artistId }
             });
 
-            // Create track-album relationship if needed
-            if (req.body.hasAlbum === 'true' && albumId) {
-                // Get the highest position for this album
+            // Add album relationship if specified
+            if (albumId) {
                 const lastTrackInAlbum = await tx.trackAlbum.findFirst({
-                    where: { albumId: albumId },
+                    where: { albumId },
                     orderBy: { position: 'desc' },
                     select: { position: true }
                 });
-
                 const nextPosition = (lastTrackInAlbum?.position ?? 0) + 1;
 
                 await tx.trackAlbum.create({
-                    data: {
-                        trackId: newTrack.id,
-                        albumId: albumId,
-                        position: nextPosition
-                    }
+                    data: { trackId: newTrack.id, albumId, position: nextPosition }
                 });
             }
 
-            // Return the complete track with relations
-            return await tx.track.findUniqueOrThrow({
+            // Add genre relationships if provided
+            if (genreIds.length > 0) {
+                await Promise.all(
+                    genreIds.map(genreId => 
+                        tx.trackGenre.create({
+                            data: { trackId: newTrack.id, genreId }
+                        })
+                    )
+                );
+            }
+
+            // Return complete track data
+            return tx.track.findUnique({
                 where: { id: newTrack.id },
                 include: {
                     file: true,
-                    artists: {
-                        include: {
-                            artist: true
-                        }
-                    },
-                    albums: {
-                        include: {
-                            album: true
-                        }
-                    }
+                    artists: { include: { artist: true } },
+                    albums: { include: { album: true } }
                 }
             });
         });
