@@ -30,6 +30,8 @@ const multer = configurationStorage();
 
 app.use((req: Request, res: Response, next: NextFunction) => {
 	res.header('Access-Control-Expose-Headers', 'X-Total-Count');
+	res.header('Access-Control-Allow-Origin', '*');
+	res.header('Access-Control-Allow-Headers', 'Content-Type');
 	next();
 });
 app.use(express.json());
